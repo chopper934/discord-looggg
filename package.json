@@ -1,13 +1,13 @@
 {
   "name": "discord-bot",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.ts",
   "scripts": {
-    "start": "node --loader ts-node/esm index.ts"
+    "start": "npx tsx index.ts"
   },
   "dependencies": {
     "discord.js": "^14.18.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.3"
+    "tsx": "^4.19.2"
   }
 }
