@@ -4,14 +4,16 @@ import {
   EmbedBuilder,
   ChannelType,
   PermissionFlagsBits,
-  PresenceUpdateStatus,
   SlashCommandBuilder,
   REST,
-  Routes
+  Routes,
+  PartialMessage,
+  Message,
+  PresenceUpdateStatus
 } from "discord.js";
 
-const imageLogChannels = new Map<string, string>();
-const stickerLogChannels = new Map<string, string>();
+const imageLogChannels = new Map<string, string>(); // لوق الصور المحذوفة
+const stickerLogChannels = new Map<string, string>(); // لوق الستيكرات المحذوفة
 const excludedChannels = new Map<string, Set<string>>();
 
 const client = new Client({
@@ -21,21 +23,49 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildPresences,
-  ]
+  ],
+  partials: ["MESSAGE", "CHANNEL", "REACTION"]
 });
 
 const commands = [
   new SlashCommandBuilder().setName('ping').setDescription('يشوف سرعة البوت'),
-  new SlashCommandBuilder().setName('setlogimage').setDescription('تحديد روم لوق الصور').addChannelOption(o=>o.setName('روم').setDescription('منشن الروم').setRequired(true).addChannelTypes(ChannelType.GuildText)).setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  new SlashCommandBuilder().setName('setlogsticker').setDescription('تحديد روم لوق الستيكرات').addChannelOption(o=>o.setName('روم').setDescription('منشن الروم').setRequired(true).addChannelTypes(ChannelType.GuildText)).setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  new SlashCommandBuilder().setName('excludelog').setDescription('استثناء روم من اللوق').addChannelOption(o=>o.setName('روم').setDescription('منشن الروم').setRequired(true).addChannelTypes(ChannelType.GuildText)).setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  new SlashCommandBuilder().setName('excludelist').setDescription('تشوف الرومات المستثناة').setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  new SlashCommandBuilder().setName('broadcast').setDescription('إرسال برودكاست').addStringOption(o=>o.setName('نوع').setDescription('مين ترسل له').setRequired(true).addChoices({name:'كل الأعضاء',value:'all'},{name:'المتصلين فقط',value:'online'},{name:'الأوفلاين فقط',value:'offline'})).addStringOption(o=>o.setName('الرسالة').setDescription('الرسالة').setRequired(true)).addUserOption(o=>o.setName('يوزر').setDescription('شخص معين').setRequired(false)).addAttachmentOption(o=>o.setName('صورة').setDescription('ترفق صورة').setRequired(false)).setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  
+  new SlashCommandBuilder()
+  .setName('setlogimage')
+  .setDescription('تحديد روم لوق الصور المحذوفة')
+  .addChannelOption(o=>o.setName('روم').setDescription('منشن الروم').setRequired(true).addChannelTypes(ChannelType.GuildText))
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  
+  new SlashCommandBuilder()
+  .setName('setlogsticker')
+  .setDescription('تحديد روم لوق الستيكرات المحذوفة')
+  .addChannelOption(o=>o.setName('روم').setDescription('منشن الروم').setRequired(true).addChannelTypes(ChannelType.GuildText))
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  
+  new SlashCommandBuilder()
+  .setName('excludelog')
+  .setDescription('استثناء روم من لوق الحذف')
+  .addChannelOption(o=>o.setName('روم').setDescription('منشن الروم').setRequired(true).addChannelTypes(ChannelType.GuildText))
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  
+  new SlashCommandBuilder()
+  .setName('excludelist')
+  .setDescription('تشوف الرومات المستثناة')
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  
+  new SlashCommandBuilder()
+  .setName('broadcast')
+  .setDescription('إرسال برودكاست')
+  .addStringOption(o=>o.setName('نوع').setDescription('مين ترسل له').setRequired(true).addChoices({name:'كل الأعضاء',value:'all'},{name:'المتصلين فقط',value:'online'},{name:'الأوفلاين فقط',value:'offline'}))
+  .addStringOption(o=>o.setName('الرسالة').setDescription('الرسالة').setRequired(true))
+  .addUserOption(o=>o.setName('يوزر').setDescription('شخص معين').setRequired(false))
+  .addAttachmentOption(o=>o.setName('صورة').setDescription('ترفق صورة').setRequired(false))
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map(command => command.toJSON());
 
-client.on("ready", async () => {
+client.on("clientReady", async () => {
   console.log(`Logged in as ${client.user?.tag}!`);
-  client.user?.setActivity('Admin | /help', { type: 1, url: 'https://www.twitch.tv/discord' });
+  client.user?.setActivity('يراقب المحذوفات', { type: 3 });
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN!);
   try {
     await rest.put(Routes.applicationCommands(client.user!.id), { body: commands });
@@ -53,34 +83,39 @@ client.on("interactionCreate", async (interaction) => {
       const sent = await interaction.reply({ content: 'جاري حساب البينق...', fetchReply: true });
       interaction.editReply(`🏓 البينق: ${sent.createdTimestamp - interaction.createdTimestamp}ms | API: ${Math.round(client.ws.ping)}ms`);
     }
+    
     if (interaction.commandName === 'setlogimage') {
       const channel = interaction.options.getChannel('روم', true);
       imageLogChannels.set(interaction.guild.id, channel.id);
-      interaction.reply(`✅ تم تحديد ${channel} كروم لوق الصور والفيديوهات.`);
+      interaction.reply(`✅ تم تحديد ${channel} كروم لوق الصور المحذوفة.`);
     }
+    
     if (interaction.commandName === 'setlogsticker') {
       const channel = interaction.options.getChannel('روم', true);
       stickerLogChannels.set(interaction.guild.id, channel.id);
-      interaction.reply(`✅ تم تحديد ${channel} كروم لوق الستيكرات.`);
+      interaction.reply(`✅ تم تحديد ${channel} كروم لوق الستيكرات المحذوفة.`);
     }
+    
     if (interaction.commandName === 'excludelog') {
       const channel = interaction.options.getChannel('روم', true);
       if (!excludedChannels.has(interaction.guild.id)) excludedChannels.set(interaction.guild.id, new Set());
       const excluded = excludedChannels.get(interaction.guild.id)!;
       if (excluded.has(channel.id)) {
         excluded.delete(channel.id);
-        interaction.reply(`✅ تم إلغاء استثناء ${channel}.`);
+        interaction.reply(`✅ تم إلغاء استثناء ${channel} من لوق الحذف.`);
       } else {
         excluded.add(channel.id);
-        interaction.reply(`✅ تم استثناء ${channel}.`);
+        interaction.reply(`✅ تم استثناء ${channel} من لوق الحذف.`);
       }
     }
+    
     if (interaction.commandName === 'excludelist') {
       const excluded = excludedChannels.get(interaction.guild.id);
       if (!excluded || excluded.size === 0) return interaction.reply("مافيه أي روم مستثنى حالياً.");
       const list = Array.from(excluded).map(id => `<#${id}>`).join("\n");
-      interaction.reply(`**الرومات المستثناة:**\n${list}`);
+      interaction.reply(`**الرومات المستثناة من لوق الحذف:**\n${list}`);
     }
+    
     if (interaction.commandName === 'broadcast') {
       await interaction.deferReply();
       const type = interaction.options.getString('نوع', true);
@@ -89,6 +124,7 @@ client.on("interactionCreate", async (interaction) => {
       const attachment = interaction.options.getAttachment('صورة');
       const members = await interaction.guild.members.fetch();
       let targets: any[] = [];
+      
       if (targetUser) {
         const member = members.get(targetUser.id);
         if (member &&!member.user.bot) targets = [member];
@@ -99,6 +135,7 @@ client.on("interactionCreate", async (interaction) => {
       } else {
         targets = members.filter(m =>!m.user.bot);
       }
+      
       let count = 0;
       for (const member of targets.values()) {
         try {
@@ -122,22 +159,50 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.on("messageCreate", async (msg) => {
-  if (msg.author.bot ||!msg.guild) return;
-  const isExcluded = excludedChannels.get(msg.guild.id)?.has(msg.channel.id);
-  if (isExcluded) return;
+// حدث الحذف - يرسل المحذوفات للوق المناسب
+client.on("messageDelete", async (msg: Message | PartialMessage) => {
   try {
+    if (msg.partial) {
+      try {
+        await msg.fetch();
+      } catch {
+        return;
+      }
+    }
+
+    if (!msg.guild || msg.author?.bot) return;
+    
+    const isExcluded = excludedChannels.get(msg.guild.id)?.has(msg.channel.id);
+    if (isExcluded) return;
+
+    // 1. لوق الستيكرات المحذوفة
     if (msg.stickers.size > 0) {
       const stickerLogId = stickerLogChannels.get(msg.guild.id);
       if (stickerLogId) {
         const logChannel = msg.guild.channels.cache.get(stickerLogId);
         if (logChannel?.isTextBased()) {
           const sticker = msg.stickers.first()!;
-          const embed = new EmbedBuilder().setTitle("📌 ستيكر جديد").setDescription(`**الراسل:** ${msg.author}\n**اليوزر:** \`${msg.author.tag}\` - ${msg.author.id}`).setColor(0xffa500).addFields({ name: "الروم", value: `${msg.channel}`, inline: true },{ name: "اسم الستيكر", value: `\`${sticker.name}\``, inline: true },{ name: "الوقت", value: `<t:${Math.floor(msg.createdTimestamp / 1000)}:F>`, inline: true }).setThumbnail(msg.author.displayAvatarURL()).setImage(`https://cdn.discordapp.com/stickers/${sticker.id}.png`).setFooter({ text: `Sticker ID: ${sticker.id}` }).setTimestamp();
-          await logChannel.send({ content: `ستيكر من ${msg.author}`, embeds: [embed] });
+          const embed = new EmbedBuilder()
+          .setTitle("🗑️ ستيكر محذوف")
+          .setDescription(`**الراسل:** ${msg.author}\n**اليوزر:** \`${msg.author.tag}\` - ${msg.author.id}`)
+          .setColor(0xED4245)
+          .addFields(
+              { name: "الروم", value: `${msg.channel}`, inline: true },
+              { name: "اسم الستيكر", value: `\`${sticker.name}\``, inline: true },
+              { name: "وقت الحذف", value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
+            )
+          .setThumbnail(msg.author.displayAvatarURL())
+          .setImage(`https://cdn.discordapp.com/stickers/${sticker.id}.png`)
+          .setFooter({ text: `Sticker ID: ${sticker.id}` })
+          .setTimestamp();
+          
+          if (msg.content) embed.addFields({ name: "محتوى الرسالة", value: msg.content.slice(0, 1024) });
+          await logChannel.send({ content: `⚠️ ستيكر محذوف من ${msg.author}`, embeds: [embed] });
         }
       }
     }
+
+    // 2. لوق الصور/الفيديوهات المحذوفة
     if (msg.attachments.size > 0) {
       const imageLogId = imageLogChannels.get(msg.guild.id);
       if (imageLogId) {
@@ -146,19 +211,36 @@ client.on("messageCreate", async (msg) => {
           for (const att of msg.attachments.values()) {
             if (att.contentType?.startsWith("image/") || att.contentType?.startsWith("video/")) {
               const isVideo = att.contentType?.startsWith("video/");
-              const embed = new EmbedBuilder().setTitle(isVideo? "🎥 فيديو جديد" : "🖼️ صورة جديدة").setDescription(`**الراسل:** ${msg.author}\n**اليوزر:** \`${msg.author.tag}\` - ${msg.author.id}`).setColor(isVideo? 0xff0000 : 0x0099ff).addFields({ name: "الروم", value: `${msg.channel}`, inline: true },{ name: "اسم الملف", value: `\`${att.name}\``, inline: true },{ name: "الوقت", value: `<t:${Math.floor(msg.createdTimestamp / 1000)}:F>`, inline: true },{ name: "الحجم", value: `${(att.size / 1024 / 1024).toFixed(2)} MB`, inline: true },{ name: "النوع", value: att.contentType || "غير معروف", inline: true },{ name: "الرابط", value: `[تحميل الملف](${att.url})`, inline: true }).setThumbnail(msg.author.displayAvatarURL()).setTimestamp();
+              const embed = new EmbedBuilder()
+              .setTitle(isVideo? "🗑️ فيديو محذوف" : "🗑️ صورة محذوفة")
+              .setDescription(`**الراسل:** ${msg.author}\n**اليوزر:** \`${msg.author.tag}\` - ${msg.author.id}`)
+              .setColor(0xED4245)
+              .addFields(
+                  { name: "الروم", value: `${msg.channel}`, inline: true },
+                  { name: "اسم الملف", value: `\`${att.name}\``, inline: true },
+                  { name: "وقت الحذف", value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                  { name: "الحجم", value: `${(att.size / 1024 / 1024).toFixed(2)} MB`, inline: true },
+                  { name: "الرابط الأصلي", value: `[تحميل الملف](${att.url})`, inline: true }
+                )
+              .setThumbnail(msg.author.displayAvatarURL())
+              .setTimestamp();
+
+              if (msg.content) embed.addFields({ name: "محتوى الرسالة", value: msg.content.slice(0, 1024) });
+
               if (isVideo) {
-                await logChannel.send({ content: `فيديو من ${msg.author}`, embeds: [embed], files: [att.url] });
+                await logChannel.send({ content: `⚠️ فيديو محذوف من ${msg.author}`, embeds: [embed], files: [att.url] });
               } else {
                 embed.setImage(att.url);
-                await logChannel.send({ content: `صورة من ${msg.author}`, embeds: [embed] });
+                await logChannel.send({ content: `⚠️ صورة محذوفة من ${msg.author}`, embeds: [embed] });
               }
             }
           }
         }
       }
     }
-  } catch (err) { console.error("Error in messageCreate:", err); }
+  } catch (err) { 
+    console.error("Error in messageDelete:", err); 
+  }
 });
 
 client.login(process.env.TOKEN);
