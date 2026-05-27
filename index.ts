@@ -81,9 +81,9 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
 client.once(Events.ClientReady, (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
   c.user.setActivity({
-    name: "cho",
+    name: "Cho",
     type: ActivityType.Streaming,
-    url: "https://twitch.tv/cho"
+    url: "https://twitch.tv/Cho"
   });
 });
 
